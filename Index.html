@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stracker Coach Dashboard</title>
+  <link rel="stylesheet" href="coach.css" />
+</head>
+<body>
+  <div class="coach-page">
+
+    <header class="hero-header">
+      <div class="coach-tag">Coach View v1</div>
+      <div class="hero-overlay">
+        <img
+          src="images/Stracker-header-2.png"
+          alt="Stracker Golf Stats Tracking"
+          class="hero-logo"
+        />
+      </div>
+    </header>
+
+    <main class="dashboard-shell">
+
+    <section class="top-summary">
+
+  <!-- LEFT -->
+  <div class="summary-player">
+    <div class="player-avatar">G</div>
+
+    <div class="player-meta">
+      <h1>Isaiah Gonzales</h1>
+      <p>Class of 2028 · Right-Handed</p>
+      <p>Member Colorado Jr PGA Cup Series, Forge Christian High School, 3A Golf Team</p>
+    </div>
+  </div>
+</section>
+
+   <section class="category-grid">
+  <button class="category-tile active" data-target="top">Dashboard</button>
+  <button class="category-tile" data-target="snapshotSection">Performance</button>
+  <button class="category-tile" data-target="trendSection">Scoring</button>
+  <button class="category-tile" data-target="trendDetailsAnchor">Trends</button>
+  <button class="category-tile" data-target="benchmarkSection">Benchmarks</button>
+  <button class="category-tile" data-target="insightsSection">Insights</button>
+  <button class="category-tile" data-target="contactSection">Contact</button>
+</section>
+
+      <section class="headline-band">
+        <div class="headline-left">
+          <span class="label">Current Level</span>
+          <strong>Borderline D1 / Strong D2</strong>
+        </div>
+        <div class="headline-right">
+          <span class="label">Coach takeaway</span>
+          <strong>Trending well, needs tighter consistency</strong>
+        </div>
+      </section>
+
+      <section class="main-grid">
+
+       <article class="panel snapshot-panel" id="snapshotSection">
+          
+<div class="panel-header">
+  <h2>Player Snapshot</h2>
+
+  <div class="round-control">
+    <span class="round-label">Past Rounds:</span>
+
+    <div class="sample-selector">
+      <button class="sample-btn" data-count="20">Last 20</button>
+      <button class="sample-btn active" data-count="15">Last 15</button>
+      <button class="sample-btn" data-count="10">Last 10</button>
+      <button class="sample-btn" data-count="5">Last 5</button>
+    </div>
+  </div>
+</div>
+
+          <div class="metric-grid">
+            <div class="metric-card">
+              <span class="metric-label">Scoring Avg</span>
+              <span class="metric-value">72.6</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Vs Par</span>
+              <span class="metric-value">+1.4</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">FIR</span>
+              <span class="metric-value">64%</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">GIR</span>
+              <span class="metric-value">67%</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Putts</span>
+              <span class="metric-value">30.8</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Rounds</span>
+              <span class="metric-value">15</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel trend-panel" id="trendSection">
+
+<div class="panel-header">
+  <h2>Scoring Trend</h2>
+  <div class="round-control">
+    <span class="round-label">Past Rounds:</span>
+
+    <div class="sample-selector">
+      <button class="sample-btn" data-count="20">Last 20</button>
+      <button class="sample-btn active" data-count="15">Last 15</button>
+      <button class="sample-btn" data-count="10">Last 10</button>
+      <button class="sample-btn" data-count="5">Last 5</button>
+    </div>
+  </div>
+</div>
+
+          <div class="chart-wrap">
+            <canvas id="scoreTrendChart"></canvas>
+          </div>
+
+          <!-- ========================================
+     TREND INSIGHTS TITLE
+======================================== -->
+<!-- ========================================
+     TREND INSIGHTS HEADER WITH SELECTOR
+======================================== -->
+<div class="panel-header trend-insights-header">
+  <h2>Trend Insights</h2>
+
+  <div class="round-control">
+    <span class="round-label">Past Rounds:</span>
+
+    <div class="sample-selector">
+      <button class="sample-btn" data-count="20">Last 20</button>
+      <button class="sample-btn active" data-count="15">Last 15</button>
+      <button class="sample-btn" data-count="10">Last 10</button>
+      <button class="sample-btn" data-count="5">Last 5</button>
+    </div>
+  </div>
+</div>
+
+<span id="trendDetailsAnchor"></span>
+<div id="trendInsightNote" class="insight-note"></div>
+
+          <div class="strength-leak-card">
+  <div class="strength-leak-grid">
+    <div class="strength-box" id="biggestStrengthBox">
+      <div class="strength-leak-label">Primary Strength</div>
+      <div class="strength-leak-title" id="biggestStrengthTitle">--</div>
+      <div class="strength-leak-text" id="biggestStrengthText">--</div>
+    </div>
+
+    <div class="leak-box" id="biggestLeakBox">
+      <div class="strength-leak-label">Primary Scoring Leak</div>
+      <div class="strength-leak-title" id="biggestLeakTitle">--</div>
+      <div class="strength-leak-text" id="biggestLeakText">--</div>
+    </div>
+  </div>
+</div>
+
+          <div class="trend-summary">
+
+
+            <div class="trend-mini-card">
+              <span class="metric-label">Recent 5</span>
+              <span class="metric-value small">71.8</span>
+            </div>
+            <div class="trend-mini-card">
+              <span class="metric-label">Season Best</span>
+              <span class="metric-value small">68</span>
+            </div>
+            <div class="trend-mini-card">
+              <span class="metric-label">Low Round Count</span>
+              <span class="metric-value small">3</span>
+            </div>
+          </div>
+        </article>
+
+
+         <section class="benchmarks-panel panel" id="benchmarkSection">
+  <div class="panel-header">
+    <h2>D1 / D2 Benchmark Guide</h2>
+
+    <div class="round-control">
+      <span class="round-label">Past Rounds:</span>
+
+      <div class="sample-selector">
+        <button class="sample-btn" data-count="20">20</button>
+        <button class="sample-btn active" data-count="15">15</button>
+        <button class="sample-btn" data-count="10">10</button>
+        <button class="sample-btn" data-count="5">5</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="benchmark-status-card">
+    <div class="benchmark-status-label">Current Competitive Profile</div>
+    <div class="benchmark-status-title" id="benchmarkStatusTitle">--</div>
+    <div class="benchmark-status-text" id="benchmarkStatusText">--</div>
+  </div>
+
+  <div class="benchmark-row-wrap">
+    <div id="benchmarkArrow" class="benchmark-arrow"></div>
+
+    <div class="benchmark-row">
+      <div class="benchmark-card" data-band="d1-top">
+        <span class="benchmark-title">D1 Top</span>
+        <strong>68.0 – 72.0</strong>
+      </div>
+      <div class="benchmark-card" data-band="d1-mid">
+        <span class="benchmark-title">D1 Mid-Major</span>
+        <strong>72.0 – 75.0</strong>
+      </div>
+      <div class="benchmark-card" data-band="d1-low">
+        <span class="benchmark-title">D1 Lower Tier</span>
+        <strong>75.0 – 78.0</strong>
+      </div>
+      <div class="benchmark-card" data-band="d2-top">
+        <span class="benchmark-title">D2 Top</span>
+        <strong>72.0 – 76.0</strong>
+      </div>
+      <div class="benchmark-card" data-band="d2-typical">
+        <span class="benchmark-title">D2 Typical</span>
+        <strong>74.0 – 80.0</strong>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+        <article class="panel insights-panel" id="insightsSection">
+          <h2>Coach Insights</h2>
+          <ul class="insight-list">
+            <li>Scoring average sits in the D1 mid-major conversation.</li>
+            <li>Ball striking is a visible strength.</li>
+            <li>Fairways are good, but still have room to tighten.</li>
+            <li>Putts are solid enough to support lower scoring.</li>
+            <li>Main opportunity: reduce round-to-round spread.</li>
+          </ul>
+
+          <div class="insight-callout">
+            <span class="label">Current read</span>
+            <strong>D1 / Strong D2 projection with continued progress</strong>
+          </div>
+        </article>
+
+      </section>
+      
+<section class="panel contact-panel" id="contactSection">
+  <div class="panel-header">
+    <h2>Contact</h2>
+  </div>
+
+  <div class="contact-content">
+    <p>
+      Thank you for taking the time to review this player profile. This dashboard is intended to provide a clear, current, and honest snapshot of scoring, performance trends, and competitive trajectory.
+    </p>
+
+    <p>
+      Additional round history, tournament results, and player information are available upon request.
+    </p>
+
+  <div class="contact-actions">
+    <p><strong>Recruiting Contact:</strong> </p>
+  <button id="contactEmailBtn" class="contact-btn">
+    Contact Player/Family Here
+  </button>
+</div>
+
+   <p class="contact-note">
+  Statistics shown here reflect recent tracked rounds and are updated as new competitive data is added.
+</p>
+  </div>
+</section>
+    
+
+    </main>
+  </div>
+
+  <script src="coach.js"></script>
+</body>
+</html>
