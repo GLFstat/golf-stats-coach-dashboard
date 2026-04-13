@@ -1,34 +1,40 @@
-// ===== SAMPLE ROUND DATA (latest round at end) =====
-const allRounds = [
-  76.0, 75.4, 75.0, 74.6, 74.0,
-  73.8, 73.2, 73.0, 72.8, 72.6,
-  72.4, 72.2, 71.5, 70.8, 70.2,
-  69.8, 69.5, 69.1, 68.8, 68.4
-];
+let allRounds = [];
+let allRoundStats = [];
 
-// matching sample metrics for the same 20 rounds
-const allRoundStats = [
-  { fir: 57, gir: 58, putts: 32.4, vsPar: 4.0 },
-  { fir: 58, gir: 59, putts: 32.1, vsPar: 3.4 },
-  { fir: 59, gir: 60, putts: 31.9, vsPar: 3.0 },
-  { fir: 60, gir: 60, putts: 31.7, vsPar: 2.6 },
-  { fir: 60, gir: 61, putts: 31.6, vsPar: 2.0 },
-  { fir: 61, gir: 61, putts: 31.5, vsPar: 1.8 },
-  { fir: 61, gir: 62, putts: 31.4, vsPar: 1.2 },
-  { fir: 62, gir: 62, putts: 31.3, vsPar: 1.0 },
-  { fir: 62, gir: 63, putts: 31.2, vsPar: 0.8 },
-  { fir: 63, gir: 63, putts: 31.1, vsPar: 0.6 },
-  { fir: 63, gir: 64, putts: 31.0, vsPar: 0.4 },
-  { fir: 64, gir: 64, putts: 30.9, vsPar: 0.2 },
-  { fir: 64, gir: 65, putts: 30.8, vsPar: -0.5 },
-  { fir: 65, gir: 65, putts: 30.7, vsPar: -1.2 },
-  { fir: 65, gir: 66, putts: 30.6, vsPar: -1.8 },
-  { fir: 66, gir: 66, putts: 30.5, vsPar: -2.2 },
-  { fir: 66, gir: 67, putts: 30.4, vsPar: -2.5 },
-  { fir: 67, gir: 67, putts: 30.3, vsPar: -2.9 },
-  { fir: 67, gir: 68, putts: 30.2, vsPar: -3.2 },
-  { fir: 68, gir: 68, putts: 30.0, vsPar: -3.6 }
-];
+async function loadRoundsFromSupabase() {
+  if (!window.supabaseClient) {
+    console.error("Supabase client missing");
+    return;
+  }
+
+  const { data, error } = await window.supabaseClient
+    .from("completed_rounds")
+    .select("*")
+    .order("round_date", { ascending: true });
+
+  if (error) {
+    console.error("Error loading rounds:", error);
+    return;
+  }
+
+  console.log("REAL ROUNDS:", data);
+
+  allRounds = data.map(r => Number(r.total_score || 0));
+
+  allRoundStats = data.map(r => ({
+    fir: Number(r.fir_pct || 0),
+    gir: Number(r.gir_pct || 0),
+    putts: Number(r.total_putts || 0),
+    vsPar: Number(r.vs_par || 0)
+  }));
+
+  updateSnapshot();
+  updateTrendInsight();
+  drawScoreTrendChart();
+  renderStrengthLeakCard();
+  renderBenchmarkStatus();
+  positionBenchmarkArrow();
+}
 
 // ===== STATE =====
 let currentSampleSize = 15;
@@ -648,7 +654,10 @@ if (contactBtn) {
 }
 }
 
-window.addEventListener("load", initCoachDashboard);
+window.addEventListener("load", async () => {
+  initCoachDashboard();
+  await loadRoundsFromSupabase();
+});
 window.addEventListener("resize", () => {
   drawScoreTrendChart();
   positionBenchmarkArrow();
