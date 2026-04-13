@@ -1879,3 +1879,27 @@ body {
     font-size: 0.82rem;
   }
 }
+
+
+/* ========================================
+   BACK TO TOP BUTTON
+======================================== */
+.top-btn-wrap {
+  margin-top: 18px;
+}
+
+.top-btn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: #119d3f;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+}
+
+.top-btn:hover {
+  transform: translateY(-1px);
+}
