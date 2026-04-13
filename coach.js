@@ -87,7 +87,7 @@ function updateSnapshot() {
 
   const trendHeaderRange = document.querySelector(".trend-panel .panel-header span");
   if (trendHeaderRange) {
-    trendHeaderRange.textContent = `Last ${rounds.length} Rounds`;
+    trendHeaderRange.textContent = `${rounds.length} Rounds`;
   }
 
   const recent5 = getAverage(allRounds.slice(-5));
@@ -104,7 +104,7 @@ function updateTrendSampleLabel() {
   const el = document.getElementById("trendSampleLabel");
   if (!el) return;
 
-  el.innerHTML = `Coach read based on: <strong>Last ${currentSampleSize} rounds</strong>`;
+  el.innerHTML = `Coach read based on: <strong> ${currentSampleSize} rounds</strong>`;
 }
 
 function updateTrendInsight() {
