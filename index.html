@@ -40,15 +40,17 @@
 <!-- ========================================
      STICKY CATEGORY NAV
 ======================================== -->
-<section class="category-grid">
-  <button class="category-tile active" data-target="top">Dashboard</button>
-  <button class="category-tile" data-target="snapshotSection">Performance</button>
-  <button class="category-tile" data-target="trendSection">Scoring</button>
-  <button class="category-tile" data-target="trendDetailsAnchor">Trends</button>
-  <button class="category-tile" data-target="benchmarkSection">Benchmarks</button>
-  <button class="category-tile" data-target="insightsSection">Insights</button>
-  <button class="category-tile" data-target="contactSection">Contact</button>
-</section>
+<div class="category-grid-wrap" id="stickyNavWrap">
+  <section class="category-grid" id="stickyNav">
+    <button class="category-tile active" data-target="top">Dashboard</button>
+    <button class="category-tile" data-target="snapshotSection">Performance</button>
+    <button class="category-tile" data-target="trendSection">Scoring</button>
+    <button class="category-tile" data-target="trendDetailsAnchor">Trends</button>
+    <button class="category-tile" data-target="benchmarkSection">Benchmarks</button>
+    <button class="category-tile" data-target="insightsSection">Insights</button>
+    <button class="category-tile" data-target="contactSection">Contact</button>
+  </section>
+</div>
 
       <section class="headline-band">
         <div class="headline-left">
@@ -128,11 +130,11 @@
             <canvas id="scoreTrendChart"></canvas>
           </div>
 
-          <!-- ========================================
-     TREND INSIGHTS TITLE
-======================================== -->
+          
+
 <!-- ========================================
      TREND INSIGHTS HEADER WITH SELECTOR
+
 ======================================== -->
 <div class="panel-header trend-insights-header">
   <h2>Trend Insights</h2>
@@ -280,17 +282,13 @@
    <p class="contact-note">
   Statistics shown here reflect recent tracked rounds and are updated as new competitive data is added.
 </p>
-
-<div class="top-btn-wrap">
-  <button id="backToTopBtn" class="top-btn" type="button">Top</button>
-</div>
-
   </div>
 </section>
-    
-
+  
     </main>
   </div>
+
+  <button id="topBtn" class="top-btn" type="button" aria-label="Back to top">TOP</button>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-client.js"></script>

@@ -662,3 +662,59 @@ window.addEventListener("resize", () => {
   drawScoreTrendChart();
   positionBenchmarkArrow();
 });
+
+/* ========================================
+   TOP BUTTON + MOBILE NAV HINT
+======================================== */
+(function () {
+  const topBtn = document.getElementById("topBtn");
+  const stickyNavWrap = document.getElementById("stickyNavWrap");
+
+  function updateTopButton() {
+    if (!topBtn) return;
+
+    if (window.scrollY > 260) {
+      topBtn.classList.add("show");
+    } else {
+      topBtn.classList.remove("show");
+    }
+  }
+
+  function updateNavHint() {
+    if (!stickyNavWrap || window.innerWidth > 700) {
+      if (stickyNavWrap) stickyNavWrap.classList.remove("nav-hint-right");
+      return;
+    }
+
+    const maxScrollLeft = stickyNavWrap.scrollWidth - stickyNavWrap.clientWidth;
+    const hasOverflow = maxScrollLeft > 8;
+    const nearEnd = stickyNavWrap.scrollLeft >= maxScrollLeft - 8;
+
+    if (hasOverflow && !nearEnd) {
+      stickyNavWrap.classList.add("nav-hint-right");
+    } else {
+      stickyNavWrap.classList.remove("nav-hint-right");
+    }
+  }
+
+  if (topBtn) {
+    topBtn.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  if (stickyNavWrap) {
+    stickyNavWrap.addEventListener("scroll", updateNavHint, { passive: true });
+  }
+
+  window.addEventListener("scroll", updateTopButton, { passive: true });
+  window.addEventListener("resize", function () {
+    updateTopButton();
+    updateNavHint();
+  });
+
+  window.addEventListener("load", function () {
+    updateTopButton();
+    updateNavHint();
+  });
+})();
