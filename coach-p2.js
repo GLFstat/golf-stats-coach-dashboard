@@ -168,7 +168,9 @@ const avgVsPar = getAverage(
 // Applicable performance stats may still use partial-round data.
 const avgFir = getAverage(stats.map(item => item.fir));
 const avgGir = getAverage(stats.map(item => item.gir));
-const avgPutts = getAverage(stats.map(item => item.putts));
+const avgPutts = getAverage(
+  completedScoringStats.map(item => item.putts)
+);
 
   const metricValues = document.querySelectorAll(".snapshot-panel .metric-value");
 
@@ -189,9 +191,25 @@ const avgPutts = getAverage(stats.map(item => item.putts));
     trendHeaderRange.textContent = `${rounds.length} Rounds`;
   }
 
-  const recent5 = getAverage(allRounds.slice(-5));
-  const seasonBest = Math.min(...allRounds);
-  const lowRoundCount = allRounds.filter(score => score < 70).length;
+const completedScoringRounds = allRoundStats.filter(
+  item => !item.roundEndedEarly
+);
+
+const completedScores = completedScoringRounds.map(
+  item => item.total_score
+);
+
+const recent5 = getAverage(
+  completedScores.slice(-5)
+);
+
+const seasonBest = completedScores.length
+  ? Math.min(...completedScores)
+  : 0;
+
+const lowRoundCount = completedScores.filter(
+  score => score < 70
+).length;
 
   const trendMiniValues = document.querySelectorAll(".trend-summary .metric-value");
   if (trendMiniValues[0]) trendMiniValues[0].textContent = recent5.toFixed(1);
@@ -207,12 +225,22 @@ function updateTrendSampleLabel() {
 }
 
 function updateTrendInsight() {
-  const rounds = getSampleRounds();
-  const insightEl = document.getElementById("trendInsightNote");
-  if (!insightEl || rounds.length < 2) return;
+  const stats = getSampleStats();
 
-  const firstScore = rounds[0];
-  const lastScore = rounds[rounds.length - 1];
+  // Scoring trends use completed rounds only.
+  // Partial rounds remain part of the selected history,
+  // but their partial scores cannot represent full-round scoring trends.
+  const completedScoringStats = stats.filter(
+    item => !item.roundEndedEarly
+  );
+
+  const insightEl = document.getElementById("trendInsightNote");
+  if (!insightEl || completedScoringStats.length < 2) return;
+
+  const firstScore = completedScoringStats[0].total_score;
+  const lastScore =
+    completedScoringStats[completedScoringStats.length - 1].total_score;
+    
   const change = lastScore - firstScore;
   const absChange = Math.abs(change);
 
@@ -270,10 +298,17 @@ function getStrengthLeakSummary(rounds) {
     };
   }
 
-  const fir = getAverageMetric(rounds, "fir");
-  const gir = getAverageMetric(rounds, "gir");
-  const putts = getAverageMetric(rounds, "putts");
-  const vsPar = getAverageMetric(rounds, "vsPar");
+const completedScoringRounds = rounds.filter(
+  item => !item.roundEndedEarly
+);
+
+// FIR and GIR may use statistically valid partial-round data.
+const fir = getAverageMetric(rounds, "fir");
+const gir = getAverageMetric(rounds, "gir");
+
+// Full-round measures must exclude rounds ended early.
+const putts = getAverageMetric(completedScoringRounds, "putts");
+const vsPar = getAverageMetric(completedScoringRounds, "vsPar");
 
   const strengthCandidates = [];
   const leakCandidates = [];
@@ -384,21 +419,33 @@ function renderStrengthLeakCard() {
 }
 
 function getBenchmarkRead() {
-  const rounds = getSampleRounds();
-  const stats = getSampleStats();
+const stats = getSampleStats();
 
-  if (!rounds.length || !stats.length) {
-    return {
-      title: "No data",
-      text: "Not enough rounds to evaluate benchmark level."
-    };
-  }
+const completedScoringStats = stats.filter(
+  item => !item.roundEndedEarly
+);
 
-  const avgScore = getAverage(rounds);
-  const avgVsPar = getAverage(stats.map(s => s.vsPar));
-  const avgGir = getAverage(stats.map(s => s.gir));
-  const avgFir = getAverage(stats.map(s => s.fir));
-  const avgPutts = getAverage(stats.map(s => s.putts));
+if (!stats.length || !completedScoringStats.length) {
+  return {
+    title: "No data",
+    text: "Not enough completed rounds to evaluate benchmark level."
+  };
+}
+
+const avgScore = getAverage(
+  completedScoringStats.map(s => s.total_score)
+);
+
+const avgVsPar = getAverage(
+  completedScoringStats.map(s => s.vsPar)
+);
+
+// Applicable performance statistics can still use partial rounds.
+const avgGir = getAverage(stats.map(s => s.gir));
+const avgFir = getAverage(stats.map(s => s.fir));
+const avgPutts = getAverage(
+  completedScoringStats.map(s => s.putts)
+);
 
   // === LEVEL DETERMINATION (simple but strong first pass) ===
   let level = "";
@@ -461,93 +508,49 @@ function getBenchmarkBand(avgScore) {
   if (avgScore <= 72) return "d1-top";
   if (avgScore <= 75) return "d1-mid";
   if (avgScore <= 78) return "d1-low";
-  if (avgScore <= 76) return "d2-top";
+
+  // Anything above the displayed D1 ranges
+  // points to the D2 Typical end of the benchmark scale.
   return "d2-typical";
 }
+
 
 function positionBenchmarkArrow() {
   const arrow = document.getElementById("benchmarkArrow");
   const rowWrap = document.querySelector(".benchmark-row-wrap");
+
   if (!arrow || !rowWrap) return;
 
-  const rounds = getSampleRounds();
-  if (!rounds.length) return;
+  const stats = getSampleStats();
 
-  const avgScore = getAverage(rounds);
+  const completedScoringStats = stats.filter(
+    item => !item.roundEndedEarly
+  );
+
+  if (!completedScoringStats.length) return;
+
+  const avgScore = getAverage(
+    completedScoringStats.map(item => item.total_score)
+  );
+
   const band = getBenchmarkBand(avgScore);
-  const targetCard = rowWrap.querySelector(`.benchmark-card[data-band="${band}"]`);
+
+  const targetCard = rowWrap.querySelector(
+    `.benchmark-card[data-band="${band}"]`
+  );
+
   if (!targetCard) return;
 
   const wrapRect = rowWrap.getBoundingClientRect();
   const cardRect = targetCard.getBoundingClientRect();
 
-  const arrowHalfWidth = 16; // matches border-left/right
-  const centerX = (cardRect.left - wrapRect.left) + (cardRect.width / 2);
+  const centerX =
+    (cardRect.left - wrapRect.left) + (cardRect.width / 2);
 
-  arrow.style.transform = `translateX(${centerX - arrowHalfWidth}px)`;
+  arrow.style.left = `${centerX}px`;
+  arrow.style.transform = "translateX(-50%)";
 }
 
-function getBenchmarkBand(avgScore) {
-  if (avgScore <= 72) return "d1-top";
-  if (avgScore <= 75) return "d1-mid";
-  if (avgScore <= 78) return "d1-low";
-  if (avgScore <= 76) return "d2-top";
-  return "d2-typical";
-}
-
-function positionBenchmarkArrow() {
-  const arrow = document.getElementById("benchmarkArrow");
-  const rowWrap = document.querySelector(".benchmark-row-wrap");
-  if (!arrow || !rowWrap) return;
-
-  const rounds = getSampleRounds();
-  if (!rounds.length) return;
-
-  const avgScore = getAverage(rounds);
-  const band = getBenchmarkBand(avgScore);
-  const targetCard = rowWrap.querySelector(`.benchmark-card[data-band="${band}"]`);
-  if (!targetCard) return;
-
-  const wrapRect = rowWrap.getBoundingClientRect();
-  const cardRect = targetCard.getBoundingClientRect();
-
-  const arrowHalfWidth = 16;
-  const centerX = (cardRect.left - wrapRect.left) + (cardRect.width / 2);
-
-  arrow.style.transform = `translateX(${centerX - arrowHalfWidth}px)`;
-}
-
-
-
-function getBenchmarkBand(avgScore) {
-  if (avgScore <= 72) return "d1-top";
-  if (avgScore <= 75) return "d1-mid";
-  if (avgScore <= 78) return "d1-low";
-  if (avgScore <= 76) return "d2-top";
-  return "d2-typical";
-}
-
-function positionBenchmarkArrow() {
-  const arrow = document.getElementById("benchmarkArrow");
-  const rowWrap = document.querySelector(".benchmark-row-wrap");
-  if (!arrow || !rowWrap) return;
-
-  const rounds = getSampleRounds();
-  if (!rounds.length) return;
-
-  const avgScore = getAverage(rounds);
-  const band = getBenchmarkBand(avgScore);
-  const targetCard = rowWrap.querySelector(`.benchmark-card[data-band="${band}"]`);
-  if (!targetCard) return;
-
-  const wrapRect = rowWrap.getBoundingClientRect();
-  const cardRect = targetCard.getBoundingClientRect();
-
-  const arrowHalfWidth = 16;
-  const centerX = (cardRect.left - wrapRect.left) + (cardRect.width / 2);
-
-  arrow.style.transform = `translateX(${centerX - arrowHalfWidth}px)`;
-}
 
 // ===== CHART =====
 // ===== CHART =====
@@ -814,14 +817,6 @@ chartPointRegions.push({
   );
 }
 
-function flashUpdate(el) {
-  if (!el) return;
-  el.classList.remove("flash-update");
-  void el.offsetWidth; // restart animation
-  el.classList.add("flash-update");
-}
-
-
 /* ========================================
    FLASH HELPER (restarts animation cleanly)
 ======================================== */
@@ -858,12 +853,6 @@ function wireSampleButtons() {
      /* ========================================
    FLASH UPDATED SECTIONS (visual feedback)
 ======================================== */
-flashUpdate(document.getElementById("trendInsightNote"));
-flashUpdate(document.getElementById("biggestStrengthBox"));
-flashUpdate(document.getElementById("biggestLeakBox"));
-flashUpdate(document.querySelector(".benchmark-status-card"));
-
-// 🔥 FLASH FEEDBACK
 flashUpdate(document.getElementById("trendInsightNote"));
 flashUpdate(document.getElementById("biggestStrengthBox"));
 flashUpdate(document.getElementById("biggestLeakBox"));
