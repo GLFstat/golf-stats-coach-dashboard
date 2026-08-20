@@ -992,3 +992,50 @@ body {
     transform: translateY(-50%) translateX(0);
   }
 }
+
+
+/* ===== +Stats Details popup scrollbar ===== */
+
+.plus-stats-detail-box {
+  scrollbar-width: thick;
+  scrollbar-color: #1f7a3f #dfeee3;
+}
+
+.plus-stats-detail-box::-webkit-scrollbar {
+  width: 18px;
+}
+
+.plus-stats-detail-box::-webkit-scrollbar-track {
+  background: #dfeee3;
+  border-radius: 999px;
+}
+
+.plus-stats-detail-box::-webkit-scrollbar-thumb {
+  background: #1f7a3f;
+  border-radius: 999px;
+  border: 2px solid #dfeee3;
+}
+
+.plus-stats-detail-box::-webkit-scrollbar-thumb:hover {
+  background: #14532d;
+}
+
+/* ===== Universal single-row sliding category nav ===== */
+
+.category-grid-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.category-grid-wrap::-webkit-scrollbar {
+  display: none;
+}
+
+.category-grid {
+  flex-wrap: nowrap;
+  width: max-content;
+  min-width: max-content;
+}
+

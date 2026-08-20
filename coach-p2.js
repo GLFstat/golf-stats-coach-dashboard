@@ -51,9 +51,11 @@ data.sort((a, b) => new Date(a.round_date) - new Date(b.round_date));
 
   allFullRounds = data; // <-- ADD THIS LINE
 
-// Keep one-hole / partial test uploads out of the scoring chart
-// const chartReadyData = data.filter(r => Number(r.total_score || 0) >= 50);
+// Keep all legitimate completed records available.
+// Partial rounds will be identified separately so they can appear
+// on the chart without being treated as completed 18-hole scores.
 const chartReadyData = data;
+
 
 allRounds = chartReadyData.map(r => Number(r.total_score || 0));
 
@@ -64,6 +66,14 @@ allRoundStats = chartReadyData.map(r => ({
   round_payload: r.round_payload || null,
   holes_json: r.holes_json || null,
 
+roundEndedEarly: Boolean(r.round_payload?.roundEndedEarly),
+completedHoleCount:
+  Number(r.round_payload?.completedHoleCount || 0),
+earlyFinishReason:
+  r.round_payload?.earlyFinishReason || "",
+
+round_date: r.round_date || "",
+
   round_date: r.round_date || "",
   round_type: r.round_type || "",
   course_name: r.course_name || "",
@@ -73,7 +83,7 @@ allRoundStats = chartReadyData.map(r => ({
   tee_rating: r.tee_rating || "",
   tee_slope: r.tee_slope || "",
 
-  fir: Number(r.fir_pct || 0),
+  fir: getCorrectedFirPct(r),
   gir: Number(r.gir_pct || 0),
   putts: Number(r.total_putts || 0),
   vsPar: Number(r.vs_par || 0)
@@ -101,6 +111,30 @@ function getSampleStats() {
   return allRoundStats.slice(-currentSampleSize);
 }
 
+function getCorrectedFirPct(round) {
+    if (!round) return 0;
+
+    // For P2 rounds, calculate FIR from actual saved Par 4/5 holes
+    if (round.source === "P2") {
+        const payload = round.round_payload || {};
+        const roundHoles = Array.isArray(payload.holes) ? payload.holes : [];
+
+        const firOpportunities = roundHoles.filter(h =>
+            h &&
+            h.saved &&
+            Number(h.par || 0) >= 4
+        );
+
+        if (firOpportunities.length > 0) {
+            const firMade = firOpportunities.filter(h => h.fir === true).length;
+            return (firMade / firOpportunities.length) * 100;
+        }
+    }
+
+    // V1 rounds (or P2 data without usable hole detail) retain stored FIR
+    return Number(round.fir_pct || 0);
+}
+
 function getAverage(arr) {
   if (!arr.length) return 0;
   const total = arr.reduce((sum, value) => sum + value, 0);
@@ -115,14 +149,26 @@ function formatVsPar(value) {
 
 // ===== SNAPSHOT =====
 function updateSnapshot() {
-  const rounds = getSampleRounds();
-  const stats = getSampleStats();
+const rounds = getSampleRounds();
+const stats = getSampleStats();
 
-  const avgScore = getAverage(rounds);
-  const avgVsPar = getAverage(stats.map(item => item.vsPar));
-  const avgFir = getAverage(stats.map(item => item.fir));
-  const avgGir = getAverage(stats.map(item => item.gir));
-  const avgPutts = getAverage(stats.map(item => item.putts));
+// Scoring metrics use completed rounds only.
+// Ended-early rounds remain in the selected history window,
+// but their partial scores do not affect scoring averages.
+const completedScoringStats = stats.filter(item => !item.roundEndedEarly);
+
+const avgScore = getAverage(
+  completedScoringStats.map(item => item.total_score)
+);
+
+const avgVsPar = getAverage(
+  completedScoringStats.map(item => item.vsPar)
+);
+
+// Applicable performance stats may still use partial-round data.
+const avgFir = getAverage(stats.map(item => item.fir));
+const avgGir = getAverage(stats.map(item => item.gir));
+const avgPutts = getAverage(stats.map(item => item.putts));
 
   const metricValues = document.querySelectorAll(".snapshot-panel .metric-value");
 
@@ -504,6 +550,7 @@ function positionBenchmarkArrow() {
 }
 
 // ===== CHART =====
+// ===== CHART =====
 function drawScoreTrendChart() {
   const canvas = document.getElementById("scoreTrendChart");
   if (!canvas) return;
@@ -511,51 +558,62 @@ function drawScoreTrendChart() {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-const rounds = getSampleRounds();
-const stats = getSampleStats();
+  const stats = getSampleStats();
 
-chartPointRegions = [];
-chartRoundStats = stats.slice();
+  chartPointRegions = [];
+  chartRoundStats = stats.slice();
 
-if (!rounds.length) return;
+  if (!stats.length) return;
 
   const parent = canvas.parentElement;
   const width = Math.max(320, parent.clientWidth - 8);
-  const height = Math.max(220, parent.clientHeight - 8);
+  const height = Math.max(260, parent.clientHeight - 8);
 
   canvas.width = width;
   canvas.height = height;
 
   ctx.clearRect(0, 0, width, height);
 
-  const padding = { top: 28, right: 24, bottom: 60, left: 72 };
+  const padding = { top: 28, right: 24, bottom: 78, left: 72 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
-const validScores = rounds.filter(s => s > 0);
+  // Only completed rounds establish the scoring scale.
+  const completedStats = stats.filter(stat =>
+    !stat.roundEndedEarly &&
+    Number(stat.total_score || 0) > 0
+  );
 
-const minData = Math.min(...validScores);
-const maxData = Math.max(...validScores);
+  if (!completedStats.length) return;
 
-// 🔥 Rounded + padded scale
-const minScore = Math.floor(minData / 5) * 5 - 5;
-const maxScore = Math.ceil(maxData / 5) * 5 + 5;
+  const validScores = completedStats.map(stat =>
+    Number(stat.total_score || 0)
+  );
 
+  const minData = Math.min(...validScores);
+  const maxData = Math.max(...validScores);
+
+  const minScore = Math.floor(minData / 5) * 5 - 5;
+  const maxScore = Math.ceil(maxData / 5) * 5 + 5;
+
+  const range = maxScore - minScore;
+
+  let yStep = 5;
+
+  if (range > 60) yStep = 10;
+  else if (range > 30) yStep = 5;
+  else if (range > 15) yStep = 2;
+  else yStep = 1;
+
+  // ===== Horizontal score grid =====
   ctx.strokeStyle = "#d8e6dd";
   ctx.lineWidth = 1;
 
-const range = maxScore - minScore;
-
-let yStep = 5;
-
-if (range > 60) yStep = 10;
-else if (range > 30) yStep = 5;
-else if (range > 15) yStep = 2;
-else yStep = 1;
-
-for (let value = minScore; value <= maxScore; value += yStep) {
+  for (let value = minScore; value <= maxScore; value += yStep) {
     const y =
-      padding.top + ((maxScore - value) / (maxScore - minScore || 1)) * chartHeight;
+      padding.top +
+      ((maxScore - value) / (maxScore - minScore || 1)) *
+        chartHeight;
 
     ctx.beginPath();
     ctx.moveTo(padding.left, y);
@@ -569,55 +627,134 @@ for (let value = minScore; value <= maxScore; value += yStep) {
     ctx.fillText(String(value), padding.left - 10, y);
   }
 
+  // ===== Completed-round trend line =====
+  // Partial rounds are deliberately NOT connected to this line.
   ctx.strokeStyle = "#2ea957";
   ctx.lineWidth = 4;
   ctx.beginPath();
 
-  rounds.forEach((score, index) => {
-    const x =
-      padding.left + (index / Math.max(rounds.length - 1, 1)) * chartWidth;
-    const y =
-      padding.top + ((maxScore - score) / (maxScore - minScore || 1)) * chartHeight;
+  let startedLine = false;
 
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  stats.forEach((stat, index) => {
+    if (stat.roundEndedEarly) return;
+
+    const score = Number(stat.total_score || 0);
+    if (!score) return;
+
+    const x =
+      padding.left +
+      (index / Math.max(stats.length - 1, 1)) * chartWidth;
+
+    const y =
+      padding.top +
+      ((maxScore - score) / (maxScore - minScore || 1)) *
+        chartHeight;
+
+    if (!startedLine) {
+      ctx.moveTo(x, y);
+      startedLine = true;
+    } else {
+      ctx.lineTo(x, y);
+    }
   });
 
   ctx.stroke();
 
-  rounds.forEach((score, index) => {
-    const x =
-      padding.left + (index / Math.max(rounds.length - 1, 1)) * chartWidth;
-    const y =
-      padding.top + ((maxScore - score) / (maxScore - minScore || 1)) * chartHeight;
+  // ===== Round markers =====
+  stats.forEach((stat, index) => {
+    const score = Number(stat.total_score || 0);
+    if (!score) return;
 
-    ctx.beginPath();
-    ctx.fillStyle = "#2ea957";
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.fill();
-    chartPointRegions.push({
+    const x =
+      padding.left +
+      (index / Math.max(stats.length - 1, 1)) * chartWidth;
+
+    const y =
+      padding.top +
+      ((maxScore - score) / (maxScore - minScore || 1)) *
+        chartHeight;
+
+  let markerY = y;
+
+   if (stat.roundEndedEarly) {
+  // Partial round:
+  // Keep it in chronological position on the graph,
+  // but do not treat its raw partial score as an 18-hole score.
+  const partialY = padding.top + chartHeight * 0.82;
+    markerY = partialY;
+  const size = 8;
+
+  // Dashed vertical guide for the partial round
+ctx.save();
+ctx.strokeStyle = "rgba(232, 117, 34, 0.40)";
+ctx.lineWidth = 1.5;
+ctx.setLineDash([5, 5]);
+
+ctx.beginPath();
+ctx.moveTo(x, padding.top);
+ctx.lineTo(x, padding.top + chartHeight);
+ctx.stroke();
+
+ctx.restore();
+
+  ctx.beginPath();
+  ctx.moveTo(x, partialY - size);
+  ctx.lineTo(x + size, partialY);
+  ctx.lineTo(x, partialY + size);
+  ctx.lineTo(x - size, partialY);
+  ctx.closePath();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  ctx.strokeStyle = "#e87522";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+} else {
+  // Normal completed-round node.
+  ctx.beginPath();
+  ctx.fillStyle = "#2ea957";
+  ctx.arc(x, y, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.fillStyle = "#ffffff";
+  ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+    // Keep every marker clickable.
+chartPointRegions.push({
   index,
   x,
-  y,
+  y: markerY,
   hitRadius: 18
 });
 
-    ctx.beginPath();
-    ctx.fillStyle = "#ffffff";
-    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-
+    // Round number
     ctx.fillStyle = "#546d5d";
     ctx.font = "13px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(String(index + 1), x, height - padding.bottom + 12);
+
+    ctx.fillText(
+      String(index + 1),
+      x,
+      padding.top + chartHeight + 12
+    );
   });
 
+  // ===== Axis titles =====
   ctx.fillStyle = "#4f6858";
   ctx.font = "14px Arial";
   ctx.textAlign = "center";
-  ctx.fillText("Round", padding.left + chartWidth / 2, height - 18);
+
+  ctx.fillText(
+    "Round",
+    padding.left + chartWidth / 2,
+    height - 38
+  );
 
   ctx.save();
   ctx.translate(22, padding.top + chartHeight / 2);
@@ -625,6 +762,56 @@ for (let value = minScore; value <= maxScore; value += yStep) {
   ctx.textAlign = "center";
   ctx.fillText("Score", 0, 0);
   ctx.restore();
+
+  // ===== Legend =====
+  const legendY = height - 14;
+  const legendX = padding.left;
+
+  // Completed Round — match actual green chart node.
+  ctx.beginPath();
+  ctx.fillStyle = "#2ea957";
+  ctx.arc(legendX, legendY, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.fillStyle = "#ffffff";
+  ctx.arc(legendX, legendY, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#546d5d";
+  ctx.font = "13px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(
+    "Completed Round",
+    legendX + 14,
+    legendY
+  );
+
+  // Round Ended Early — match orange diamond.
+  const earlyLegendX = width - padding.right - 125;
+  const size = 6;
+
+  ctx.beginPath();
+  ctx.moveTo(earlyLegendX, legendY - size);
+  ctx.lineTo(earlyLegendX + size, legendY);
+  ctx.lineTo(earlyLegendX, legendY + size);
+  ctx.lineTo(earlyLegendX - size, legendY);
+  ctx.closePath();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  ctx.strokeStyle = "#e87522";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  ctx.fillStyle = "#546d5d";
+  ctx.fillText(
+    "Round Ended Early",
+    earlyLegendX + 14,
+    legendY
+  );
 }
 
 function flashUpdate(el) {
@@ -798,10 +985,32 @@ window.addEventListener("resize", () => {
     updateNavHint();
   });
 
-  window.addEventListener("load", function () {
+window.addEventListener("load", function () {
     updateTopButton();
+
+    if (stickyNavWrap) {
+        const nav = document.getElementById("stickyNav");
+
+        if (nav) {
+            const overflowAmount =
+                nav.scrollWidth - stickyNavWrap.clientWidth;
+
+            if (overflowAmount > 8) {
+                nav.style.transition = "none";
+                nav.style.transform = `translateX(-${overflowAmount}px)`;
+
+                void nav.offsetWidth;
+
+                setTimeout(function () {
+                    nav.style.transition = "transform 1.5s ease-in-out";
+                    nav.style.transform = "translateX(0)";
+                }, .500);
+            }
+        }
+    }
+
     updateNavHint();
-  });
+});
 })();
 
 function handleScoreTrendChartTap(event) {
@@ -852,9 +1061,9 @@ openRoundSummaryModal(stat, hit.index + 1);
 function openRoundSummaryModal(stat, roundNumber) {
   if (!stat) return;
 
-// Use the full Supabase row when available so +Stats can access round_payload.holes
-selectedPlusStatsRound =
-  (allFullRounds || []).find(r => String(r.id || "") === String(stat.id || "")) || stat;
+  // Use the full Supabase row when available so +Stats can access round_payload.holes
+  selectedPlusStatsRound =
+    (allFullRounds || []).find(r => String(r.id || "") === String(stat.id || "")) || stat;
 
   let modal = document.getElementById("roundSummaryModal");
 
@@ -870,6 +1079,25 @@ selectedPlusStatsRound =
   const putts = Number(stat.putts || 0);
   const vsPar = Number(stat.vsPar || 0);
 
+  const isEndedEarly = Boolean(stat.roundEndedEarly);
+  const holesCompleted = Number(stat.completedHoleCount || 0);
+  const earlyReason = stat.earlyFinishReason || "";
+
+
+// Historical P2 exception:
+// Overland ended after the front 9 before played-yardage
+// could be derived automatically from saved hole yardages.
+const isOverlandPartial =
+  isEndedEarly &&
+  String(stat.course_name || "").toLowerCase().includes("overland");
+
+const yardageDisplay = isOverlandPartial
+  ? "3,706 played of 7,548"
+  : (stat.tee_yardage
+      ? Number(stat.tee_yardage).toLocaleString()
+      : "--");
+
+
   const vsParText =
     vsPar > 0 ? `+${vsPar}` :
     vsPar < 0 ? `${vsPar}` : "E";
@@ -878,7 +1106,46 @@ selectedPlusStatsRound =
     ? `<span style="background:#1f7a3f;color:white;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800;">P2 +Stats</span>`
     : `<span style="background:#e5e7eb;color:#333;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800;">V1</span>`;
 
+  const endedEarlyBadge = isEndedEarly
+    ? `
+      <span style="
+        display:inline-block;
+        border:1px solid #e87522;
+        color:#c85f16;
+        padding:5px 9px;
+        font-size:12px;
+        font-weight:800;
+        margin-left:8px;
+      ">
+        Round Ended Early${earlyReason ? ` — ${earlyReason}` : ""}
+      </span>
+    `
+    : "";
+
+  const partialRoundNote = isEndedEarly
+    ? `
+      <div style="
+        margin-top:14px;
+        padding:12px;
+        border-radius:12px;
+        background:#fff8f2;
+        border:1px solid #f1c7a8;
+        font-size:13px;
+        line-height:1.45;
+        color:#4a4038;
+      ">
+        <strong>Partial Round:</strong>
+        This round is shown in the scoring history for context.
+        Its scoring result is not included in the player's Scoring Average
+        or completed-round scoring trend.
+        Other statistical data, not related to scoring, does contribute
+        to applicable performance statistics.
+      </div>
+    `
+    : "";
+
   modal.className = "";
+
   modal.style.cssText = `
     position: fixed;
     inset: 0;
@@ -899,6 +1166,7 @@ selectedPlusStatsRound =
       overflow:hidden;
       box-shadow:0 12px 30px rgba(0,0,0,0.35);
     ">
+
       <div style="
         background:#1f7a3f;
         color:white;
@@ -906,9 +1174,9 @@ selectedPlusStatsRound =
         display:flex;
         justify-content:space-between;
         align-items:flex-start;
-        overflow-y:auto;
       ">
         <strong>Round ${roundNumber} Summary</strong>
+
         <button onclick="closeRoundSummaryModal()" style="
           background:white;
           color:#1f7a3f;
@@ -923,15 +1191,31 @@ selectedPlusStatsRound =
       </div>
 
       <div style="padding:16px;">
-        <div style="margin-bottom:10px;">
+
+        <div style="
+          margin-bottom:10px;
+          display:flex;
+          align-items:center;
+          flex-wrap:wrap;
+          gap:4px;
+        ">
           ${sourceBadge}
+          ${endedEarlyBadge}
         </div>
 
-        <div style="font-size:15px;color:#555;margin-bottom:4px;">
+        <div style="
+          font-size:15px;
+          color:#555;
+          margin-bottom:4px;
+        ">
           ${stat.round_date || "Date not listed"} · ${stat.round_type || "Round"}
         </div>
 
-        <div style="font-size:18px;font-weight:800;margin-bottom:12px;">
+        <div style="
+          font-size:18px;
+          font-weight:800;
+          margin-bottom:12px;
+        ">
           ${stat.course_name || "Course not listed"}
         </div>
 
@@ -941,45 +1225,74 @@ selectedPlusStatsRound =
           gap:10px;
           margin-bottom:14px;
         ">
+
+          ${isEndedEarly ? `
+            <div>
+              <strong>Holes Completed:</strong>
+              ${holesCompleted || "--"}
+            </div>
+          ` : ""}
+
           <div><strong>Score:</strong> ${score || "--"}</div>
+
           <div><strong>To Par:</strong> ${vsParText}</div>
+
           <div><strong>FIR:</strong> ${Math.round(fir)}%</div>
+
           <div><strong>GIR:</strong> ${Math.round(gir)}%</div>
+
           <div><strong>Putts:</strong> ${putts || "--"}</div>
-          <div><strong>Yardage:</strong> ${stat.tee_yardage || "--"}</div>
+
+          <div><strong>Yardage:</strong><br>${yardageDisplay}</div>
         </div>
 
-        <div style="
-          padding:12px;
-          border-radius:12px;
-          background:#f4faf5;
-          border:1px solid #d8eadc;
-          font-size:14px;
-          line-height:1.4;
-          color:#2f473b;
-        ">
-          <strong>Coach Read:</strong><br>
-          ${getSimpleRoundCoachRead(stat)}
-        </div>
+        ${partialRoundNote}
+
+        ${!isEndedEarly ? `
+          <div style="
+            padding:12px;
+            border-radius:12px;
+            background:#f4faf5;
+            border:1px solid #d8eadc;
+            font-size:14px;
+            line-height:1.4;
+            color:#2f473b;
+          ">
+            <strong>Coach Read:</strong><br>
+            ${getSimpleRoundCoachRead(stat)}
+          </div>
+        ` : ""}
 
         ${stat.source === "P2" ? `
           <div style="text-align:center;margin-top:14px;">
-           <button type="button" onclick="closeRoundSummaryModal(); openPlusStatsSimpleView()" style="
-              padding:9px 14px;
-              border-radius:999px;
-              border:none;
-              background:#111;
-              color:white;
-              font-weight:800;
-              cursor:pointer;
-            ">
+            <button
+              type="button"
+              onclick="closeRoundSummaryModal(); openPlusStatsSimpleView()"
+              style="
+                padding:9px 14px;
+                border-radius:999px;
+                border:none;
+                background:#111;
+                color:white;
+                font-weight:800;
+                cursor:pointer;
+              "
+            >
               View +Stats Details
             </button>
           </div>
         ` : ""}
+
       </div>
     </div>
   `;
+
+  // Close Round Summary when clicking the dark overlay outside the popup.
+  modal.onclick = function (event) {
+    if (event.target === modal) {
+      closeRoundSummaryModal();
+    }
+  };
 }
 
 function closeRoundSummaryModal() {
