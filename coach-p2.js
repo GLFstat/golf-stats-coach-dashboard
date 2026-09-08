@@ -8,11 +8,58 @@ let allFullRounds = []; // FULL round data including holes_json (+Stats)
 
 let selectedPlusStatsRound = null;
 
+
+function isOrdinaryNineHoleRound(round) {
+  const payload =
+    typeof round?.round_payload === "string"
+      ? (() => {
+          try {
+            return JSON.parse(round.round_payload);
+          } catch {
+            return null;
+          }
+        })()
+      : round?.round_payload;
+
+  const details = payload?.details || payload?.roundDetails || {};
+
+  const roundLength = Number(
+    details.roundLength || payload?.roundLength || round?.round_length || 0
+  );
+
+  // Explicitly planned 9-hole rounds are excluded
+  // from recruiting-facing Coach Dashboard data.
+  return roundLength === 9;
+}
+
+async function getRecruitingDataStartDate() {
+  const { data, error } = await window.supabaseClient
+    .from("recruiting_settings")
+    .select("data_start_date")
+    .eq("id", 1)
+    .single();
+
+  if (error) {
+    console.error("Recruiting start date error:", error);
+    return null;
+  }
+
+  return data?.data_start_date || null;
+}
+
 async function loadRoundsFromSupabase() {
   if (!window.supabaseClient) {
     console.error("Supabase client missing");
     return;
   }
+
+  const recruitingStartDate =
+  await getRecruitingDataStartDate();
+
+console.log(
+  "COACH DASHBOARD START DATE:",
+  recruitingStartDate
+);
 
 // ===== LOAD V1 ROUNDS =====
 const { data: v1Data, error: v1Error } = await window.supabaseClient
@@ -47,14 +94,33 @@ const data = [
 // Trend chart should read left-to-right: oldest → newest
 data.sort((a, b) => new Date(a.round_date) - new Date(b.round_date));
 
-  console.log("REAL ROUNDS:", data);
+console.log("REAL ROUNDS:", data);
 
-  allFullRounds = data; // <-- ADD THIS LINE
+const recruitingData = data.filter(round => {
+  const roundDate =
+    String(round.round_date || "").slice(0, 10);
+
+  return (
+    !recruitingStartDate ||
+    (
+      roundDate &&
+      roundDate >= recruitingStartDate
+    )
+  );
+});
+
+console.log(
+  "ND1 COACH DASHBOARD ROUNDS:",
+  recruitingData
+);
+
+allFullRounds = recruitingData;
 
 // Keep all legitimate completed records available.
-// Partial rounds will be identified separately so they can appear
-// on the chart without being treated as completed 18-hole scores.
-const chartReadyData = data;
+// Planned 9-hole rounds remain excluded.
+const chartReadyData = recruitingData.filter(
+  round => !isOrdinaryNineHoleRound(round)
+);
 
 
 allRounds = chartReadyData.map(r => Number(r.total_score || 0));
@@ -566,8 +632,6 @@ function drawScoreTrendChart() {
   chartPointRegions = [];
   chartRoundStats = stats.slice();
 
-  if (!stats.length) return;
-
   const parent = canvas.parentElement;
   const width = Math.max(320, parent.clientWidth - 8);
   const height = Math.max(260, parent.clientHeight - 8);
@@ -576,6 +640,115 @@ function drawScoreTrendChart() {
   canvas.height = height;
 
   ctx.clearRect(0, 0, width, height);
+
+// Empty ND1 chart state
+const hasCompletedScoringRound = stats.some(stat =>
+  !stat.roundEndedEarly &&
+  Number(stat.total_score || 0) > 0
+);
+
+if (!hasCompletedScoringRound) {
+    const padding = {
+      top: 28,
+      right: 24,
+      bottom: 78,
+      left: 72
+    };
+
+    const chartWidth =
+      width - padding.left - padding.right;
+
+    const chartHeight =
+      height - padding.top - padding.bottom;
+
+    const scoreLabels = [70, 75, 80, 85, 90];
+
+    ctx.strokeStyle = "#d8e6dd";
+    ctx.lineWidth = 1;
+
+    scoreLabels.forEach((score, index) => {
+      const y =
+        padding.top +
+        (index / (scoreLabels.length - 1)) *
+        chartHeight;
+
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.stroke();
+
+      ctx.fillStyle = "#698474";
+      ctx.font = "14px Arial";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+
+      ctx.fillText(
+        String(score),
+        padding.left - 10,
+        y
+      );
+    });
+
+    // Y-axis
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top);
+    ctx.lineTo(
+      padding.left,
+      padding.top + chartHeight
+    );
+    ctx.stroke();
+
+    // X-axis
+    ctx.beginPath();
+    ctx.moveTo(
+      padding.left,
+      padding.top + chartHeight
+    );
+    ctx.lineTo(
+      width - padding.right,
+      padding.top + chartHeight
+    );
+    ctx.stroke();
+
+    // Empty-state message
+    ctx.fillStyle = "#4f6858";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.font = "600 15px Arial";
+    ctx.fillText(
+      "No qualifying rounds yet",
+      padding.left + chartWidth / 2,
+      padding.top + chartHeight / 2 - 8
+    );
+
+    ctx.font = "12px Arial";
+    ctx.fillText(
+      "New Day 1: September 8, 2026",
+      padding.left + chartWidth / 2,
+      padding.top + chartHeight / 2 + 14
+    );
+
+    // Axis titles
+    ctx.font = "14px Arial";
+
+    ctx.fillText(
+      "Round",
+      padding.left + chartWidth / 2,
+      height - 38
+    );
+
+    ctx.save();
+    ctx.translate(
+      22,
+      padding.top + chartHeight / 2
+    );
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("Score", 0, 0);
+    ctx.restore();
+
+    return;
+  }
 
   const padding = { top: 28, right: 24, bottom: 78, left: 72 };
   const chartWidth = width - padding.left - padding.right;
@@ -1669,7 +1842,9 @@ function renderCoachInsights() {
   // ===== Collect all holes =====
   let allHoles = [];
 
-  allFullRounds.forEach(round => {
+  allFullRounds
+  .filter(round => !isOrdinaryNineHoleRound(round))
+  .forEach(round => {
 let holes = [];
 
 try {
